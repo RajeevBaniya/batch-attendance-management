@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  TRAINER
+  INSTITUTION
+  PROGRAMME_MANAGER
+  MONITORING_OFFICER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+model User {
+  id            String   @id @default(uuid())
+  clerkUserId   String   @unique
+  name          String
+  role          Role
+  institutionId String?
+
+  institution   User?    @relation("InstitutionUsers", fields: [institutionId], references: [id])
+  users         User[]   @relation("InstitutionUsers")
+
+  batchTrainers BatchTrainer[]
+  batchStudents BatchStudent[]
+  institutionBatches Batch[] @relation("InstitutionBatches")
+  createdInvites Invite[]
+  sessions      Session[]
+  attendance    Attendance[]
+
+  createdAt     DateTime @default(now())
+}
+
+model Batch {
+  id            String   @id @default(uuid())
+  name          String
+  institutionId String
+
+  institution   User     @relation("InstitutionBatches", fields: [institutionId], references: [id])
+
+  trainers      BatchTrainer[]
+  students      BatchStudent[]
+  invites       Invite[]
+  sessions      Session[]
+
+  createdAt     DateTime @default(now())
+}
+
+model Invite {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  batchId   String
+  createdBy String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  batch       Batch @relation(fields: [batchId], references: [id])
+  creatorUser User  @relation(fields: [createdBy], references: [id])
+}
+
+model BatchTrainer {
+  batchId   String
+  trainerId String
+
+  batch     Batch @relation(fields: [batchId], references: [id])
+  trainer   User  @relation(fields: [trainerId], references: [id])
+
+  @@id([batchId, trainerId])
+}
+
+model BatchStudent {
+  batchId   String
+  studentId String
+
+  batch     Batch @relation(fields: [batchId], references: [id])
+  student   User  @relation(fields: [studentId], references: [id])
+
+  @@id([batchId, studentId])
+}
+
+model Session {
+  id         String      @id @default(uuid())
+  batchId    String
+  trainerId  String
+  title      String
+  date       DateTime
+  startTime  DateTime
+  endTime    DateTime
+
+  batch      Batch       @relation(fields: [batchId], references: [id])
+  trainer    User        @relation(fields: [trainerId], references: [id])
+
+  attendance Attendance[]
+
+  createdAt  DateTime    @default(now())
+}
+
+model Attendance {
+  id        String           @id @default(uuid())
+  sessionId String
+  studentId String
+  status    AttendanceStatus
+  markedAt  DateTime         @default(now())
+
+  session   Session          @relation(fields: [sessionId], references: [id])
+  student   User             @relation(fields: [studentId], references: [id])
+
+  @@unique([sessionId, studentId])
+}
