@@ -1,0 +1,24 @@
+import { Role } from "@prisma/client";
+import { NextFunction, Request, Response } from "express";
+
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+const restrictMonitoringWriteAccess = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    });
+  }
+
+  if (req.user.role === Role.MONITORING_OFFICER && WRITE_METHODS.has(req.method)) {
+    return res.status(403).json({
+      success: false,
+      message: "Read-only access",
+    });
+  }
+
+  return next();
+};
+
+export default restrictMonitoringWriteAccess;
