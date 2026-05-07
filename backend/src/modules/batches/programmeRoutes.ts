@@ -8,7 +8,7 @@ const programmeRouter = Router();
 
 programmeRouter.get(
   "/summary",
-  requireRole([Role.PROGRAMME_MANAGER]),
+  requireRole([Role.PROGRAMME_MANAGER, Role.MONITORING_OFFICER]),
   getProgrammeSummaryHandler,
 );
 
