@@ -8,6 +8,8 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
+  PENDING_TRAINER
   STUDENT
   TRAINER
   INSTITUTION
@@ -22,22 +24,37 @@ enum AttendanceStatus {
 
 model User {
   id            String   @id @default(uuid())
-  clerkUserId   String   @unique
+  clerkUserId   String?  @unique
+  email         String?  @unique
+  password      String?
   name          String
   role          Role
   institutionId String?
 
-  institution   User?    @relation("InstitutionUsers", fields: [institutionId], references: [id])
-  users         User[]   @relation("InstitutionUsers")
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  createdInstitutions Institution[] @relation("InstitutionCreator")
 
   batchTrainers BatchTrainer[]
   batchStudents BatchStudent[]
-  institutionBatches Batch[] @relation("InstitutionBatches")
   createdInvites Invite[]
   sessions      Session[]
   attendance    Attendance[]
+  approvedTrainerRequests TrainerRequest[] @relation("TrainerRequestApprover")
+  trainerRequests TrainerRequest[] @relation("TrainerRequestRequester")
 
   createdAt     DateTime @default(now())
+}
+
+model Institution {
+  id                    String   @id @default(uuid())
+  name                  String
+  createdBySuperAdminId String
+  createdAt             DateTime @default(now())
+
+  superAdmin User @relation("InstitutionCreator", fields: [createdBySuperAdminId], references: [id])
+  users      User[]
+  batches    Batch[]
+  trainerRequests TrainerRequest[]
 }
 
 model Batch {
@@ -45,7 +62,7 @@ model Batch {
   name          String
   institutionId String
 
-  institution   User     @relation("InstitutionBatches", fields: [institutionId], references: [id])
+  institution   Institution @relation(fields: [institutionId], references: [id])
 
   trainers      BatchTrainer[]
   students      BatchStudent[]
@@ -53,6 +70,21 @@ model Batch {
   sessions      Session[]
 
   createdAt     DateTime @default(now())
+}
+
+model TrainerRequest {
+  id            String   @id @default(uuid())
+  requesterId   String
+  institutionId String
+  approvedById  String?
+  approvedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  requester   User        @relation("TrainerRequestRequester", fields: [requesterId], references: [id])
+  institution Institution @relation(fields: [institutionId], references: [id])
+  approver    User?       @relation("TrainerRequestApprover", fields: [approvedById], references: [id])
+
+  @@unique([requesterId, institutionId])
 }
 
 model Invite {
