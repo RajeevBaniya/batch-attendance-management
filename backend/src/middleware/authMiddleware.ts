@@ -4,23 +4,32 @@ import { NextFunction, Request, Response } from "express";
 import prisma from "../config/db";
 
 const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  const isSyncRoute = req.method === "POST" && req.path === "/auth/sync";
   const devClerkUserIdHeader = req.header("x-dev-clerk-user-id");
+  const devEmailHeader = req.header("x-dev-email") ?? undefined;
 
   if (process.env.NODE_ENV === "development" && devClerkUserIdHeader) {
+    req.authIdentity = {
+      clerkUserId: devClerkUserIdHeader,
+      email: devEmailHeader,
+    };
+
     const devUser = await prisma.user.findUnique({
       where: {
         clerkUserId: devClerkUserIdHeader,
       },
     });
 
-    if (!devUser) {
+    if (!devUser && !isSyncRoute) {
       return res.status(401).json({
         success: false,
         message: "Authenticated user not found",
       });
     }
 
-    req.user = devUser;
+    if (devUser) {
+      req.user = devUser;
+    }
     return next();
   }
 
@@ -63,20 +72,29 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
       });
     }
 
+    const payloadRecord = payload as Record<string, unknown>;
+    const payloadEmail = typeof payloadRecord.email === "string" ? payloadRecord.email : undefined;
+    req.authIdentity = {
+      clerkUserId: payload.sub,
+      email: payloadEmail,
+    };
+
     const user = await prisma.user.findUnique({
       where: {
         clerkUserId: payload.sub,
       },
     });
 
-    if (!user) {
+    if (!user && !isSyncRoute) {
       return res.status(401).json({
         success: false,
         message: "Authenticated user not found",
       });
     }
 
-    req.user = user;
+    if (user) {
+      req.user = user;
+    }
     return next();
   } catch (_error) {
     return res.status(401).json({

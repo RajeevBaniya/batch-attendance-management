@@ -4,9 +4,14 @@ import { Role } from "@prisma/client";
 import authMiddleware from "./middleware/authMiddleware";
 import restrictMonitoringWriteAccess from "./middleware/monitoringMiddleware";
 import requireRole from "./middleware/roleMiddleware";
+import analyticsRouter from "./modules/analytics/analyticsRoutes";
 import attendanceRouter from "./modules/attendance/attendanceRoutes";
+import authRouter from "./modules/auth/authRoutes";
 import batchRouter from "./modules/batches/batchRoutes";
-import institutionRouter from "./modules/batches/institutionRoutes";
+import institutionRouter from "./modules/institutions/institutionRoutes";
+import publicRouter from "./modules/public/publicRoutes";
+import superAdminRouter from "./modules/institutions/superAdminRoutes";
+import trainerRequestRouter from "./modules/institutions/trainerRequestRoutes";
 import programmeRouter from "./modules/batches/programmeRoutes";
 import sessionRouter from "./modules/sessions/sessionRoutes";
 import userRouter from "./modules/users/userRoutes";
@@ -20,13 +25,19 @@ app.get("/health", (_req, res) => {
   return res.status(200).send("OK");
 });
 
+app.use("/api/public", publicRouter);
+
 app.use("/api", authMiddleware);
 app.use("/api", restrictMonitoringWriteAccess);
 
 app.use("/api/users", userRouter);
+app.use("/api/auth", authRouter);
 app.use("/api/batches", batchRouter);
 app.use("/api/institutions", institutionRouter);
+app.use("/api", superAdminRouter);
+app.use("/api/trainer-requests", trainerRequestRouter);
 app.use("/api/programme", programmeRouter);
+app.use("/api/analytics", analyticsRouter);
 app.use("/api/sessions", sessionRouter);
 app.use("/api/attendance", attendanceRouter);
 
