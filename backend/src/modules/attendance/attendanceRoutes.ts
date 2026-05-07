@@ -2,10 +2,11 @@ import { Role } from "@prisma/client";
 import { Router } from "express";
 
 import requireRole from "../../middleware/roleMiddleware";
-import { markAttendanceHandler } from "./attendanceController";
+import { getStudentAttendanceHandler, markAttendanceHandler } from "./attendanceController";
 
 const attendanceRouter = Router();
 
-attendanceRouter.post("/mark", requireRole([Role.STUDENT]), markAttendanceHandler);
+attendanceRouter.post("/", requireRole([Role.TRAINER]), markAttendanceHandler);
+attendanceRouter.get("/student", requireRole([Role.STUDENT]), getStudentAttendanceHandler);
 
 export default attendanceRouter;

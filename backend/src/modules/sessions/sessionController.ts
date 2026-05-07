@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 
 import { errorResponse } from "../../utils/errorResponse";
-import { createSession, getSessionAttendance } from "./sessionService";
+import { createSession, getSessionAttendance, getTrainerSessions } from "./sessionService";
 import { createSessionSchema, sessionIdParamSchema, sessionQuerySchema } from "./sessionTypes";
 
 const createSessionHandler = async (req: Request, res: Response) => {
@@ -87,4 +87,40 @@ const getSessionAttendanceHandler = async (req: Request, res: Response) => {
   }
 };
 
-export { createSessionHandler, getSessionAttendanceHandler };
+const getTrainerSessionsHandler = async (req: Request, res: Response) => {
+  try {
+    const parsedQuery = sessionQuerySchema.safeParse(req.query);
+    if (!parsedQuery.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request",
+      });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const sessions = await getTrainerSessions(req.user);
+    const data = sessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      batchName: session.batch.name,
+      sessionDate: session.date,
+      startTime: session.startTime,
+      endTime: session.endTime,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+};
+
+export { createSessionHandler, getSessionAttendanceHandler, getTrainerSessionsHandler };

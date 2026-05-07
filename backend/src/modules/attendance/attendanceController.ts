@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 
 import { errorResponse } from "../../utils/errorResponse";
-import { markAttendance } from "./attendanceService";
+import { getStudentAttendance, markAttendance } from "./attendanceService";
 import { attendanceQuerySchema, markAttendanceSchema } from "./attendanceTypes";
 
 const markAttendanceHandler = async (req: Request, res: Response) => {
@@ -38,16 +38,47 @@ const markAttendanceHandler = async (req: Request, res: Response) => {
     });
   } catch (error) {
     return errorResponse(res, error, {
-      SESSION_NOT_ACTIVE: {
+      TRAINER_INSTITUTION_REQUIRED: {
         status: 400,
         message: "Invalid request",
       },
-      ATTENDANCE_ALREADY_MARKED: {
-        status: 409,
-        message: "Conflict",
+      STUDENT_NOT_IN_BATCH: {
+        status: 403,
+        message: "Forbidden",
+      },
+      TRAINER_NOT_ASSIGNED_TO_SESSION_BATCH: {
+        status: 403,
+        message: "Forbidden",
       },
     });
   }
 };
 
-export { markAttendanceHandler };
+const getStudentAttendanceHandler = async (req: Request, res: Response) => {
+  try {
+    const parsedQuery = attendanceQuerySchema.safeParse(req.query);
+    if (!parsedQuery.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request",
+      });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const attendance = await getStudentAttendance(req.user);
+    return res.status(200).json({
+      success: true,
+      data: attendance,
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+};
+
+export { getStudentAttendanceHandler, markAttendanceHandler };

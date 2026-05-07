@@ -10,28 +10,86 @@ const createBatch = async (input: CreateBatchInput, user: User) => {
     throw new Error("ROLE_NOT_ALLOWED");
   }
 
-  let institutionId: string;
-
-  if (user.role === Role.INSTITUTION) {
-    institutionId = user.id;
-  } else if (user.institutionId) {
-    institutionId = user.institutionId;
-  } else {
+  if (!user.institutionId) {
     throw new Error("TRAINER_INSTITUTION_REQUIRED");
   }
 
   const batch = await prisma.batch.create({
     data: {
       name: input.name,
-      institutionId,
+      institutionId: user.institutionId,
     },
   });
 
   return batch;
 };
 
+const getBatches = async (currentUser: User) => {
+  if (currentUser.role !== Role.INSTITUTION || !currentUser.institutionId) {
+    throw new Error("ROLE_NOT_ALLOWED");
+  }
+
+  const batches = await prisma.batch.findMany({
+    where: {
+      institutionId: currentUser.institutionId,
+    },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      _count: {
+        select: {
+          trainers: true,
+          students: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return batches.map((batch) => ({
+    id: batch.id,
+    name: batch.name,
+    createdAt: batch.createdAt,
+    trainerCount: batch._count.trainers,
+    studentCount: batch._count.students,
+  }));
+};
+
+const getTrainerBatches = async (currentUser: User) => {
+  if (currentUser.role !== Role.TRAINER) {
+    throw new Error("ROLE_NOT_ALLOWED");
+  }
+
+  const assignments = await prisma.batchTrainer.findMany({
+    where: {
+      trainerId: currentUser.id,
+    },
+    select: {
+      batch: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      batch: {
+        createdAt: "desc",
+      },
+    },
+  });
+
+  return assignments.map((assignment) => ({
+    id: assignment.batch.id,
+    name: assignment.batch.name,
+  }));
+};
+
 const assertBatchOwnership = (batchInstitutionId: string, currentUser: User) => {
-  if (currentUser.role === Role.INSTITUTION && batchInstitutionId !== currentUser.id) {
+  if (currentUser.role === Role.INSTITUTION && batchInstitutionId !== currentUser.institutionId) {
     throw new Error("UNAUTHORIZED_BATCH_ACCESS");
   }
 
@@ -46,6 +104,9 @@ const assertBatchOwnership = (batchInstitutionId: string, currentUser: User) => 
 const assignTrainerToBatch = async (batchId: string, input: AssignTrainerInput, currentUser: User) => {
   if (currentUser.role !== Role.INSTITUTION) {
     throw new Error("ROLE_NOT_ALLOWED");
+  }
+  if (!currentUser.institutionId) {
+    throw new Error("TRAINER_INSTITUTION_REQUIRED");
   }
 
   const batch = await prisma.batch.findUnique({
@@ -227,6 +288,18 @@ const joinBatchWithInvite = async (input: JoinBatchInput, currentUser: User) => 
     throw new Error("INVITE_EXPIRED");
   }
 
+  const inviteBatch = await prisma.batch.findUnique({
+    where: { id: invite.batchId },
+    select: { institutionId: true },
+  });
+  if (!inviteBatch) {
+    throw new Error("BATCH_NOT_FOUND");
+  }
+
+  if (currentUser.institutionId && currentUser.institutionId !== inviteBatch.institutionId) {
+    throw new Error("UNAUTHORIZED_BATCH_ACCESS");
+  }
+
   const existingAssignment = await prisma.batchStudent.findUnique({
     where: {
       batchId_studentId: {
@@ -263,7 +336,7 @@ const getBatchSummary = async (batchId: string, currentUser: User) => {
     throw new Error("BATCH_NOT_FOUND");
   }
 
-  if (currentUser.role === Role.INSTITUTION && batch.institutionId !== currentUser.id) {
+  if (currentUser.role === Role.INSTITUTION && batch.institutionId !== currentUser.institutionId) {
     throw new Error("UNAUTHORIZED_BATCH_ACCESS");
   }
 
@@ -316,11 +389,15 @@ const getBatchSummary = async (batchId: string, currentUser: User) => {
 };
 
 const getInstitutionSummary = async (institutionId: string, currentUser: User) => {
-  if (currentUser.role !== Role.INSTITUTION && currentUser.role !== Role.PROGRAMME_MANAGER) {
+  if (
+    currentUser.role !== Role.INSTITUTION &&
+    currentUser.role !== Role.PROGRAMME_MANAGER &&
+    currentUser.role !== Role.MONITORING_OFFICER
+  ) {
     throw new Error("ROLE_NOT_ALLOWED");
   }
 
-  if (currentUser.role === Role.INSTITUTION && currentUser.id !== institutionId) {
+  if (currentUser.role === Role.INSTITUTION && currentUser.institutionId !== institutionId) {
     throw new Error("UNAUTHORIZED_INSTITUTION_ACCESS");
   }
 
@@ -394,14 +471,12 @@ const getInstitutionSummary = async (institutionId: string, currentUser: User) =
 };
 
 const getProgrammeSummary = async (currentUser: User) => {
-  if (currentUser.role !== Role.PROGRAMME_MANAGER) {
+  if (currentUser.role !== Role.PROGRAMME_MANAGER && currentUser.role !== Role.MONITORING_OFFICER) {
     throw new Error("ROLE_NOT_ALLOWED");
   }
 
   const [totalInstitutions, totalBatches, totalStudents, sessions] = await Promise.all([
-    prisma.user.count({
-      where: { role: Role.INSTITUTION },
-    }),
+    prisma.institution.count(),
     prisma.batch.count(),
     prisma.batchStudent.count(),
     prisma.session.findMany({
@@ -450,6 +525,8 @@ const getProgrammeSummary = async (currentUser: User) => {
 
 export {
   createBatch,
+  getBatches,
+  getTrainerBatches,
   assignTrainerToBatch,
   assignStudentToBatch,
   generateInvite,

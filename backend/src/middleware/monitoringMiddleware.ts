@@ -4,6 +4,10 @@ import { NextFunction, Request, Response } from "express";
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 const restrictMonitoringWriteAccess = (req: Request, res: Response, next: NextFunction) => {
+  if (req.method === "POST" && req.path === "/auth/sync" && !req.user) {
+    return next();
+  }
+
   if (!req.user) {
     return res.status(401).json({
       success: false,

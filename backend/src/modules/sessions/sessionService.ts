@@ -134,4 +134,31 @@ const getSessionAttendance = async (sessionId: string, currentUser: User) => {
   };
 };
 
-export { createSession, getSessionAttendance };
+const getTrainerSessions = async (currentUser: User) => {
+  if (currentUser.role !== Role.TRAINER) {
+    throw new Error("ROLE_NOT_ALLOWED");
+  }
+
+  return prisma.session.findMany({
+    where: {
+      trainerId: currentUser.id,
+    },
+    select: {
+      id: true,
+      title: true,
+      date: true,
+      startTime: true,
+      endTime: true,
+      batch: {
+        select: {
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      date: "desc",
+    },
+  });
+};
+
+export { createSession, getSessionAttendance, getTrainerSessions };

@@ -6,6 +6,8 @@ import {
   assignStudentHandler,
   assignTrainerHandler,
   createBatchHandler,
+  getBatchesHandler,
+  getTrainerBatchesHandler,
   generateInviteHandler,
   getBatchSummaryHandler,
   joinBatchHandler,
@@ -14,6 +16,8 @@ import {
 const batchRouter = Router();
 
 batchRouter.post("/", requireRole([Role.TRAINER, Role.INSTITUTION]), createBatchHandler);
+batchRouter.get("/", requireRole([Role.INSTITUTION]), getBatchesHandler);
+batchRouter.get("/trainer", requireRole([Role.TRAINER]), getTrainerBatchesHandler);
 batchRouter.post("/:id/trainers", requireRole([Role.INSTITUTION]), assignTrainerHandler);
 batchRouter.post("/:id/students", requireRole([Role.INSTITUTION, Role.TRAINER]), assignStudentHandler);
 batchRouter.post("/:id/invite", requireRole([Role.TRAINER, Role.INSTITUTION]), generateInviteHandler);

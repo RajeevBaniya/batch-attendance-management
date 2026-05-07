@@ -5,6 +5,8 @@ import {
   assignStudentToBatch,
   assignTrainerToBatch,
   createBatch,
+  getBatches,
+  getTrainerBatches,
   generateInvite,
   getBatchSummary,
   getInstitutionSummary,
@@ -60,6 +62,60 @@ const createBatchHandler = async (req: Request, res: Response) => {
         message: "Invalid request",
       },
     });
+  }
+};
+
+const getBatchesHandler = async (req: Request, res: Response) => {
+  try {
+    const parsedQuery = batchQuerySchema.safeParse(req.query);
+    if (!parsedQuery.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request",
+      });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const batches = await getBatches(req.user);
+    return res.status(200).json({
+      success: true,
+      data: batches,
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+};
+
+const getTrainerBatchesHandler = async (req: Request, res: Response) => {
+  try {
+    const parsedQuery = batchQuerySchema.safeParse(req.query);
+    if (!parsedQuery.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request",
+      });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const batches = await getTrainerBatches(req.user);
+    return res.status(200).json({
+      success: true,
+      data: batches,
+    });
+  } catch (error) {
+    return errorResponse(res, error);
   }
 };
 
@@ -342,6 +398,8 @@ const getProgrammeSummaryHandler = async (req: Request, res: Response) => {
 
 export {
   createBatchHandler,
+  getBatchesHandler,
+  getTrainerBatchesHandler,
   assignTrainerHandler,
   assignStudentHandler,
   generateInviteHandler,
