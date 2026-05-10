@@ -41,8 +41,27 @@ model User {
   attendance    Attendance[]
   approvedTrainerRequests TrainerRequest[] @relation("TrainerRequestApprover")
   trainerRequests TrainerRequest[] @relation("TrainerRequestRequester")
+  auditLogs       AuditLog[]      @relation("AuditActor")
 
   createdAt     DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  actorRole Role?
+  eventType String
+  entityType String
+  entityId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([eventType])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
 }
 
 model Institution {
