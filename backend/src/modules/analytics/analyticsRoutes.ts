@@ -2,6 +2,7 @@ import { Role } from "@prisma/client";
 import { Router } from "express";
 
 import requireRole from "../../middleware/roleMiddleware";
+
 import { getAnalyticsInstitutionsHandler } from "./analyticsController";
 
 const analyticsRouter = Router();

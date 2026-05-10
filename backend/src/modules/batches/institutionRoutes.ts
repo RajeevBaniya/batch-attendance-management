@@ -2,6 +2,7 @@ import { Role } from "@prisma/client";
 import { Router } from "express";
 
 import requireRole from "../../middleware/roleMiddleware";
+
 import { getInstitutionSummaryHandler } from "./batchController";
 
 const institutionRouter = Router();

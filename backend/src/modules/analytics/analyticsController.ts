@@ -1,7 +1,9 @@
-import { Request, Response } from "express";
+import { type Request, type Response } from "express";
 import { z } from "zod";
 
 import { errorResponse } from "../../utils/errorResponse";
+import { buildPaginatedData, parsePaginationParams } from "../../utils/pagination";
+
 import { listAnalyticsInstitutions } from "./analyticsService";
 
 const analyticsQuerySchema = z.object({}).passthrough();
@@ -17,8 +19,12 @@ const getAnalyticsInstitutionsHandler = async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const institutions = await listAnalyticsInstitutions(req.user);
-    return res.status(200).json({ success: true, data: institutions });
+    const pagination = parsePaginationParams(req.query);
+    const institutions = await listAnalyticsInstitutions(req.user, pagination);
+    return res.status(200).json({
+      success: true,
+      data: buildPaginatedData(institutions.items, institutions.totalItems, pagination.page, pagination.limit),
+    });
   } catch (error) {
     return errorResponse(res, error);
   }

@@ -1,6 +1,8 @@
-import { Request, Response } from "express";
+import { type Request, type Response } from "express";
 
 import { errorResponse } from "../../utils/errorResponse";
+import { buildPaginatedData, parsePaginationParams } from "../../utils/pagination";
+
 import {
   approveTrainerRequest,
   createInstitution,
@@ -207,8 +209,9 @@ const getTrainerRequestsHandler = async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const requests = await getTrainerRequests(req.user);
-    const data = requests.map((request) => ({
+    const pagination = parsePaginationParams(req.query);
+    const requests = await getTrainerRequests(req.user, pagination);
+    const items = requests.items.map((request) => ({
       id: request.id,
       userId: request.requester.id,
       name: request.requester.name,
@@ -216,7 +219,10 @@ const getTrainerRequestsHandler = async (req: Request, res: Response) => {
       status: request.approvedAt ? "APPROVED" : "PENDING",
       createdAt: request.createdAt,
     }));
-    return res.status(200).json({ success: true, data });
+    return res.status(200).json({
+      success: true,
+      data: buildPaginatedData(items, requests.totalItems, pagination.page, pagination.limit),
+    });
   } catch (error) {
     return errorResponse(res, error);
   }

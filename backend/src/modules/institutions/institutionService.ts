@@ -1,13 +1,17 @@
-import { Role, User } from "@prisma/client";
+import { Role, type User } from "@prisma/client";
 
 import prisma from "../../config/db";
 import { hashPassword } from "../../utils/password";
+import { recordAuditEvent } from "../audit/auditService";
+import { publishRealtimeEvent } from "../realtime/realtimeService";
+
 import type {
   CreateInstitutionAdminInput,
   CreateInstitutionInput,
   CreateRoleUserInput,
   CreateTrainerRequestInput,
 } from "./institutionTypes";
+import type { PaginationParams } from "../../utils/pagination";
 
 const assertSuperAdmin = (currentUser: User) => {
   if (currentUser.role !== Role.SUPER_ADMIN) {
@@ -34,12 +38,25 @@ const userPublicSelect = {
 const createInstitution = async (input: CreateInstitutionInput, currentUser: User) => {
   assertSuperAdmin(currentUser);
 
-  return prisma.institution.create({
+  const institution = await prisma.institution.create({
     data: {
       name: input.name,
       createdBySuperAdminId: currentUser.id,
     },
   });
+
+  await recordAuditEvent({
+    actorId: currentUser.id,
+    actorRole: currentUser.role,
+    eventType: "institution.created",
+    entityType: "institution",
+    entityId: institution.id,
+    metadata: {
+      institutionName: institution.name,
+    },
+  });
+
+  return institution;
 };
 
 const listInstitutions = async (currentUser: User) => {
@@ -185,12 +202,25 @@ const createTrainerRequest = async (input: CreateTrainerRequestInput, currentUse
     },
   });
 
-  return prisma.trainerRequest.create({
+  const trainerRequest = await prisma.trainerRequest.create({
     data: {
       requesterId: currentUser.id,
       institutionId: input.institutionId,
     },
   });
+
+  await recordAuditEvent({
+    actorId: currentUser.id,
+    actorRole: currentUser.role,
+    eventType: "trainer.request.created",
+    entityType: "trainer_request",
+    entityId: trainerRequest.id,
+    metadata: {
+      institutionId: input.institutionId,
+    },
+  });
+
+  return trainerRequest;
 };
 
 const approveTrainerRequest = async (trainerRequestId: string, currentUser: User) => {
@@ -211,7 +241,7 @@ const approveTrainerRequest = async (trainerRequestId: string, currentUser: User
     throw new Error("TRAINER_REQUEST_ALREADY_APPROVED");
   }
 
-  return prisma.$transaction(async (transaction) => {
+  const result = await prisma.$transaction(async (transaction) => {
     const updatedUser = await transaction.user.update({
       where: { id: request.requesterId },
       data: {
@@ -234,31 +264,63 @@ const approveTrainerRequest = async (trainerRequestId: string, currentUser: User
       request: updatedRequest,
     };
   });
-};
 
-const getTrainerRequests = async (currentUser: User) => {
-  assertInstitutionAdmin(currentUser);
+  publishRealtimeEvent("trainer.request.approved", {
+    institutionId: request.institutionId,
+    trainerId: result.user.id,
+    requesterId: request.requesterId,
+  });
 
-  return prisma.trainerRequest.findMany({
-    where: {
-      institutionId: currentUser.institutionId ?? undefined,
-    },
-    select: {
-      id: true,
-      requester: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      createdAt: true,
-      approvedAt: true,
-    },
-    orderBy: {
-      createdAt: "desc",
+  await recordAuditEvent({
+    actorId: currentUser.id,
+    actorRole: currentUser.role,
+    eventType: "trainer.request.approved",
+    entityType: "trainer_request",
+    entityId: result.request.id,
+    metadata: {
+      institutionId: request.institutionId,
+      requesterId: request.requesterId,
     },
   });
+
+  return result;
+};
+
+const getTrainerRequests = async (currentUser: User, pagination: PaginationParams) => {
+  assertInstitutionAdmin(currentUser);
+
+  const where = {
+    institutionId: currentUser.institutionId ?? undefined,
+  };
+
+  const [totalItems, items] = await prisma.$transaction([
+    prisma.trainerRequest.count({ where }),
+    prisma.trainerRequest.findMany({
+      where,
+      select: {
+        id: true,
+        requester: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        createdAt: true,
+        approvedAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip: pagination.skip,
+      take: pagination.limit,
+    }),
+  ]);
+
+  return {
+    items,
+    totalItems,
+  };
 };
 
 const getInstitutionTrainers = async (currentUser: User) => {
