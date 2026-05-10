@@ -1,6 +1,7 @@
 import { Role } from "@prisma/client";
 
 import prisma from "../../config/db";
+
 import type { CreateUserInput } from "./userTypes";
 
 const userPublicSelect = {

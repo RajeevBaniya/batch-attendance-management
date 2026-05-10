@@ -1,7 +1,11 @@
-import { Role, User } from "@prisma/client";
+import { Role, type User } from "@prisma/client";
 
 import prisma from "../../config/db";
+import { recordAuditEvent } from "../audit/auditService";
+import { publishRealtimeEvent } from "../realtime/realtimeService";
+
 import type { MarkAttendanceInput } from "./attendanceTypes";
+import type { PaginationParams } from "../../utils/pagination";
 
 const markAttendance = async (input: MarkAttendanceInput, currentUser: User) => {
   if (currentUser.role !== Role.TRAINER) {
@@ -55,7 +59,7 @@ const markAttendance = async (input: MarkAttendanceInput, currentUser: User) => 
   });
 
   if (existingAttendance) {
-    return prisma.attendance.update({
+    const updatedAttendance = await prisma.attendance.update({
       where: {
         sessionId_studentId: {
           sessionId: input.sessionId,
@@ -67,6 +71,29 @@ const markAttendance = async (input: MarkAttendanceInput, currentUser: User) => 
         markedAt: new Date(),
       },
     });
+
+    publishRealtimeEvent("attendance.marked", {
+      institutionId: batch.institutionId,
+      trainerId: currentUser.id,
+      studentId: input.studentId,
+      batchId: session.batchId,
+      sessionId: input.sessionId,
+    });
+
+    await recordAuditEvent({
+      actorId: currentUser.id,
+      actorRole: currentUser.role,
+      eventType: "attendance.marked",
+      entityType: "attendance",
+      entityId: updatedAttendance.id,
+      metadata: {
+        sessionId: input.sessionId,
+        studentId: input.studentId,
+        status: input.status,
+      },
+    });
+
+    return updatedAttendance;
   }
 
   const studentInBatch = await prisma.batchStudent.findUnique({
@@ -91,55 +118,88 @@ const markAttendance = async (input: MarkAttendanceInput, currentUser: User) => 
     },
   });
 
+  publishRealtimeEvent("attendance.marked", {
+    institutionId: batch.institutionId,
+    trainerId: currentUser.id,
+    studentId: input.studentId,
+    batchId: session.batchId,
+    sessionId: input.sessionId,
+  });
+
+  await recordAuditEvent({
+    actorId: currentUser.id,
+    actorRole: currentUser.role,
+    eventType: "attendance.marked",
+    entityType: "attendance",
+    entityId: attendance.id,
+    metadata: {
+      sessionId: input.sessionId,
+      studentId: input.studentId,
+      status: input.status,
+    },
+  });
+
   return attendance;
 };
 
-const getStudentAttendance = async (currentUser: User) => {
+const getStudentAttendance = async (currentUser: User, pagination: PaginationParams) => {
   if (currentUser.role !== Role.STUDENT) {
     throw new Error("ROLE_NOT_ALLOWED");
   }
 
-  const records = await prisma.batchStudent.findMany({
-    where: {
-      studentId: currentUser.id,
-    },
-    select: {
-      batch: {
-        select: {
-          name: true,
-          sessions: {
-            select: {
-              id: true,
-              title: true,
-              date: true,
-              attendance: {
-                where: {
-                  studentId: currentUser.id,
-                },
-                select: {
-                  status: true,
-                },
-                take: 1,
-              },
-            },
-            orderBy: {
-              date: "desc",
-            },
-          },
+  const where = {
+    batch: {
+      students: {
+        some: {
+          studentId: currentUser.id,
         },
       },
     },
-  });
+  };
 
-  return records.flatMap((record) =>
-    record.batch.sessions.map((session) => ({
-      sessionId: session.id,
-      title: session.title,
-      batchName: record.batch.name,
-      date: session.date,
-      status: session.attendance[0]?.status ?? null,
-    })),
-  );
+  const [totalItems, sessions] = await prisma.$transaction([
+    prisma.session.count({ where }),
+    prisma.session.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        batch: {
+          select: {
+            name: true,
+          },
+        },
+        attendance: {
+          where: {
+            studentId: currentUser.id,
+          },
+          select: {
+            status: true,
+          },
+          take: 1,
+        },
+      },
+      orderBy: {
+        date: "desc",
+      },
+      skip: pagination.skip,
+      take: pagination.limit,
+    }),
+  ]);
+
+  const items = sessions.map((session) => ({
+    sessionId: session.id,
+    title: session.title,
+    batchName: session.batch.name,
+    date: session.date,
+    status: session.attendance[0]?.status ?? null,
+  }));
+
+  return {
+    items,
+    totalItems,
+  };
 };
 
 export { getStudentAttendance, markAttendance };

@@ -1,7 +1,11 @@
-import { Role, User } from "@prisma/client";
+import { Role, type User } from "@prisma/client";
 
 import prisma from "../../config/db";
+import { recordAuditEvent } from "../audit/auditService";
+import { publishRealtimeEvent } from "../realtime/realtimeService";
+
 import type { CreateSessionInput } from "./sessionTypes";
+import type { PaginationParams } from "../../utils/pagination";
 
 const createSession = async (input: CreateSessionInput, currentUser: User) => {
   if (currentUser.role !== Role.TRAINER) {
@@ -61,6 +65,25 @@ const createSession = async (input: CreateSessionInput, currentUser: User) => {
       date: dateUtc,
       startTime: startTimeUtc,
       endTime: endTimeUtc,
+    },
+  });
+
+  publishRealtimeEvent("session.created", {
+    institutionId: batch.institutionId,
+    trainerId: currentUser.id,
+    batchId: input.batchId,
+    sessionId: session.id,
+  });
+
+  await recordAuditEvent({
+    actorId: currentUser.id,
+    actorRole: currentUser.role,
+    eventType: "session.created",
+    entityType: "session",
+    entityId: session.id,
+    metadata: {
+      batchId: input.batchId,
+      institutionId: batch.institutionId,
     },
   });
 
@@ -134,31 +157,43 @@ const getSessionAttendance = async (sessionId: string, currentUser: User) => {
   };
 };
 
-const getTrainerSessions = async (currentUser: User) => {
+const getTrainerSessions = async (currentUser: User, pagination: PaginationParams) => {
   if (currentUser.role !== Role.TRAINER) {
     throw new Error("ROLE_NOT_ALLOWED");
   }
 
-  return prisma.session.findMany({
-    where: {
-      trainerId: currentUser.id,
-    },
-    select: {
-      id: true,
-      title: true,
-      date: true,
-      startTime: true,
-      endTime: true,
-      batch: {
-        select: {
-          name: true,
+  const where = {
+    trainerId: currentUser.id,
+  };
+
+  const [totalItems, items] = await prisma.$transaction([
+    prisma.session.count({ where }),
+    prisma.session.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        startTime: true,
+        endTime: true,
+        batch: {
+          select: {
+            name: true,
+          },
         },
       },
-    },
-    orderBy: {
-      date: "desc",
-    },
-  });
+      orderBy: {
+        date: "desc",
+      },
+      skip: pagination.skip,
+      take: pagination.limit,
+    }),
+  ]);
+
+  return {
+    items,
+    totalItems,
+  };
 };
 
 export { createSession, getSessionAttendance, getTrainerSessions };

@@ -1,6 +1,8 @@
-import { Request, Response } from "express";
+import { type Request, type Response } from "express";
 
 import { errorResponse } from "../../utils/errorResponse";
+import { buildPaginatedData, parsePaginationParams } from "../../utils/pagination";
+
 import {
   assignStudentToBatch,
   assignTrainerToBatch,
@@ -82,10 +84,11 @@ const getBatchesHandler = async (req: Request, res: Response) => {
       });
     }
 
-    const batches = await getBatches(req.user);
+    const pagination = parsePaginationParams(req.query);
+    const batches = await getBatches(req.user, pagination);
     return res.status(200).json({
       success: true,
-      data: batches,
+      data: buildPaginatedData(batches.items, batches.totalItems, pagination.page, pagination.limit),
     });
   } catch (error) {
     return errorResponse(res, error);
@@ -109,10 +112,11 @@ const getTrainerBatchesHandler = async (req: Request, res: Response) => {
       });
     }
 
-    const batches = await getTrainerBatches(req.user);
+    const pagination = parsePaginationParams(req.query);
+    const batches = await getTrainerBatches(req.user, pagination);
     return res.status(200).json({
       success: true,
-      data: batches,
+      data: buildPaginatedData(batches.items, batches.totalItems, pagination.page, pagination.limit),
     });
   } catch (error) {
     return errorResponse(res, error);

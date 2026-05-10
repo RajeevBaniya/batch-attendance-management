@@ -1,9 +1,13 @@
 import crypto from "node:crypto";
 
-import { Role, User } from "@prisma/client";
+import { Role, type User } from "@prisma/client";
 
 import prisma from "../../config/db";
+import { recordAuditEvent } from "../audit/auditService";
+import { publishRealtimeEvent } from "../realtime/realtimeService";
+
 import type { AssignStudentInput, AssignTrainerInput, CreateBatchInput, JoinBatchInput } from "./batchTypes";
+import type { PaginationParams } from "../../utils/pagination";
 
 const createBatch = async (input: CreateBatchInput, user: User) => {
   if (user.role !== Role.TRAINER && user.role !== Role.INSTITUTION) {
@@ -21,71 +25,115 @@ const createBatch = async (input: CreateBatchInput, user: User) => {
     },
   });
 
+  publishRealtimeEvent("batch.created", {
+    institutionId: batch.institutionId,
+    batchId: batch.id,
+  });
+
+  await recordAuditEvent({
+    actorId: user.id,
+    actorRole: user.role,
+    eventType: "batch.created",
+    entityType: "batch",
+    entityId: batch.id,
+    metadata: {
+      institutionId: batch.institutionId,
+    },
+  });
+
   return batch;
 };
 
-const getBatches = async (currentUser: User) => {
+const getBatches = async (currentUser: User, pagination: PaginationParams) => {
   if (currentUser.role !== Role.INSTITUTION || !currentUser.institutionId) {
     throw new Error("ROLE_NOT_ALLOWED");
   }
 
-  const batches = await prisma.batch.findMany({
-    where: {
-      institutionId: currentUser.institutionId,
-    },
-    select: {
-      id: true,
-      name: true,
-      createdAt: true,
-      _count: {
-        select: {
-          trainers: true,
-          students: true,
+  const [totalItems, batches] = await prisma.$transaction([
+    prisma.batch.count({
+      where: {
+        institutionId: currentUser.institutionId,
+      },
+    }),
+    prisma.batch.findMany({
+      where: {
+        institutionId: currentUser.institutionId,
+      },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        _count: {
+          select: {
+            trainers: true,
+            students: true,
+          },
         },
       },
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip: pagination.skip,
+      take: pagination.limit,
+    }),
+  ]);
 
-  return batches.map((batch) => ({
+  const items = batches.map((batch) => ({
     id: batch.id,
     name: batch.name,
     createdAt: batch.createdAt,
     trainerCount: batch._count.trainers,
     studentCount: batch._count.students,
   }));
+
+  return {
+    items,
+    totalItems,
+  };
 };
 
-const getTrainerBatches = async (currentUser: User) => {
+const getTrainerBatches = async (currentUser: User, pagination: PaginationParams) => {
   if (currentUser.role !== Role.TRAINER) {
     throw new Error("ROLE_NOT_ALLOWED");
   }
 
-  const assignments = await prisma.batchTrainer.findMany({
-    where: {
-      trainerId: currentUser.id,
-    },
-    select: {
-      batch: {
-        select: {
-          id: true,
-          name: true,
+  const [totalItems, assignments] = await prisma.$transaction([
+    prisma.batchTrainer.count({
+      where: {
+        trainerId: currentUser.id,
+      },
+    }),
+    prisma.batchTrainer.findMany({
+      where: {
+        trainerId: currentUser.id,
+      },
+      select: {
+        batch: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
       },
-    },
-    orderBy: {
-      batch: {
-        createdAt: "desc",
+      orderBy: {
+        batch: {
+          createdAt: "desc",
+        },
       },
-    },
-  });
+      skip: pagination.skip,
+      take: pagination.limit,
+    }),
+  ]);
 
-  return assignments.map((assignment) => ({
+  const items = assignments.map((assignment) => ({
     id: assignment.batch.id,
     name: assignment.batch.name,
   }));
+
+  return {
+    items,
+    totalItems,
+  };
 };
 
 const assertBatchOwnership = (batchInstitutionId: string, currentUser: User) => {
@@ -152,6 +200,24 @@ const assignTrainerToBatch = async (batchId: string, input: AssignTrainerInput, 
     data: {
       batchId,
       trainerId: input.trainerId,
+    },
+  });
+
+  publishRealtimeEvent("trainer.assigned", {
+    institutionId: batch.institutionId,
+    trainerId: input.trainerId,
+    batchId,
+  });
+
+  await recordAuditEvent({
+    actorId: currentUser.id,
+    actorRole: currentUser.role,
+    eventType: "trainer.assigned",
+    entityType: "batch",
+    entityId: batchId,
+    metadata: {
+      trainerId: input.trainerId,
+      institutionId: batch.institutionId,
     },
   });
 
@@ -265,6 +331,17 @@ const generateInvite = async (batchId: string, currentUser: User) => {
     },
   });
 
+  await recordAuditEvent({
+    actorId: currentUser.id,
+    actorRole: currentUser.role,
+    eventType: "invite.generated",
+    entityType: "invite",
+    entityId: invite.id,
+    metadata: {
+      batchId,
+    },
+  });
+
   return {
     token: invite.token,
     expiresAt: invite.expiresAt,
@@ -317,6 +394,23 @@ const joinBatchWithInvite = async (input: JoinBatchInput, currentUser: User) => 
     data: {
       batchId: invite.batchId,
       studentId: currentUser.id,
+    },
+  });
+
+  publishRealtimeEvent("student.joined.batch", {
+    institutionId: inviteBatch.institutionId,
+    studentId: currentUser.id,
+    batchId: invite.batchId,
+  });
+
+  await recordAuditEvent({
+    actorId: currentUser.id,
+    actorRole: currentUser.role,
+    eventType: "student.joined.batch",
+    entityType: "batch",
+    entityId: invite.batchId,
+    metadata: {
+      institutionId: inviteBatch.institutionId,
     },
   });
 

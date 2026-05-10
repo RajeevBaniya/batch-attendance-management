@@ -1,6 +1,8 @@
-import { Request, Response } from "express";
+import { type Request, type Response } from "express";
 
 import { errorResponse } from "../../utils/errorResponse";
+import { buildPaginatedData, parsePaginationParams } from "../../utils/pagination";
+
 import { getStudentAttendance, markAttendance } from "./attendanceService";
 import { attendanceQuerySchema, markAttendanceSchema } from "./attendanceTypes";
 
@@ -71,10 +73,11 @@ const getStudentAttendanceHandler = async (req: Request, res: Response) => {
       });
     }
 
-    const attendance = await getStudentAttendance(req.user);
+    const pagination = parsePaginationParams(req.query);
+    const attendance = await getStudentAttendance(req.user, pagination);
     return res.status(200).json({
       success: true,
-      data: attendance,
+      data: buildPaginatedData(attendance.items, attendance.totalItems, pagination.page, pagination.limit),
     });
   } catch (error) {
     return errorResponse(res, error);

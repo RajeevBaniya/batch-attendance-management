@@ -1,6 +1,8 @@
-import { Request, Response } from "express";
+import { type Request, type Response } from "express";
 
 import { errorResponse } from "../../utils/errorResponse";
+import { buildPaginatedData, parsePaginationParams } from "../../utils/pagination";
+
 import { createSession, getSessionAttendance, getTrainerSessions } from "./sessionService";
 import { createSessionSchema, sessionIdParamSchema, sessionQuerySchema } from "./sessionTypes";
 
@@ -104,8 +106,9 @@ const getTrainerSessionsHandler = async (req: Request, res: Response) => {
       });
     }
 
-    const sessions = await getTrainerSessions(req.user);
-    const data = sessions.map((session) => ({
+    const pagination = parsePaginationParams(req.query);
+    const sessions = await getTrainerSessions(req.user, pagination);
+    const items = sessions.items.map((session) => ({
       id: session.id,
       title: session.title,
       batchName: session.batch.name,
@@ -116,7 +119,7 @@ const getTrainerSessionsHandler = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      data,
+      data: buildPaginatedData(items, sessions.totalItems, pagination.page, pagination.limit),
     });
   } catch (error) {
     return errorResponse(res, error);

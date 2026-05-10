@@ -1,4 +1,5 @@
-import { Response } from "express";
+import { Prisma } from "@prisma/client";
+import { type Response } from "express";
 
 type ErrorResponse = {
   status: number;
@@ -17,6 +18,15 @@ const resolveErrorResponse = (error: unknown, overrides: ErrorOverrides = {}): E
 
   if (overrides[error.message]) {
     return overrides[error.message];
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") {
+      return {
+        status: 409,
+        message: "Resource already exists",
+      };
+    }
   }
 
   if (error.message === "ROLE_NOT_ALLOWED") {
@@ -54,6 +64,15 @@ const resolveErrorResponse = (error: unknown, overrides: ErrorOverrides = {}): E
 };
 
 const errorResponse = (res: Response, error: unknown, overrides: ErrorOverrides = {}) => {
+  if (error instanceof Error) {
+    console.error("request_failed", {
+      message: error.message,
+      name: error.name,
+    });
+  } else {
+    console.error("request_failed_unknown", error);
+  }
+
   const resolvedError = resolveErrorResponse(error, overrides);
 
   return res.status(resolvedError.status).json({
