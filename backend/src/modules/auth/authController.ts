@@ -1,6 +1,7 @@
-import { Request, Response } from "express";
+import { type Request, type Response } from "express";
 
 import { errorResponse } from "../../utils/errorResponse";
+
 import { syncAuthenticatedUser } from "./authService";
 import { authQuerySchema } from "./authTypes";
 

@@ -1,10 +1,12 @@
 import { verifyToken } from "@clerk/backend";
-import { NextFunction, Request, Response } from "express";
+import { type NextFunction, type Request, type Response } from "express";
 
 import prisma from "../config/db";
 
 const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
   const isSyncRoute = req.method === "POST" && req.path === "/auth/sync";
+  const isRealtimeStreamRoute = req.method === "GET" && req.path === "/realtime/stream";
+  const clerkSecretKey = process.env.CLERK_SECRET_KEY;
   const devClerkUserIdHeader = req.header("x-dev-clerk-user-id");
   const devEmailHeader = req.header("x-dev-email") ?? undefined;
 
@@ -34,15 +36,18 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
   }
 
   const authorizationHeader = req.header("authorization");
+  const tokenFromQuery = isRealtimeStreamRoute && typeof req.query.token === "string" ? req.query.token : null;
+  const normalizedAuthorizationHeader =
+    authorizationHeader ?? (tokenFromQuery ? `Bearer ${tokenFromQuery}` : undefined);
 
-  if (!authorizationHeader) {
+  if (!normalizedAuthorizationHeader) {
     return res.status(401).json({
       success: false,
       message: "Missing or invalid authorization header",
     });
   }
 
-  const authParts = authorizationHeader.trim().split(/\s+/);
+  const authParts = normalizedAuthorizationHeader.trim().split(/\s+/);
 
   if (authParts.length !== 2 || authParts[0] !== "Bearer") {
     return res.status(401).json({
@@ -61,8 +66,15 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
   }
 
   try {
+    if (!clerkSecretKey) {
+      return res.status(500).json({
+        success: false,
+        message: "Authentication provider not configured",
+      });
+    }
+
     const payload = await verifyToken(token, {
-      secretKey: process.env.CLERK_SECRET_KEY,
+      secretKey: clerkSecretKey,
     });
 
     if (typeof payload.sub !== "string" || payload.sub.trim() === "") {
@@ -96,7 +108,7 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
       req.user = user;
     }
     return next();
-  } catch (_error) {
+  } catch {
     return res.status(401).json({
       success: false,
       message: "Invalid authentication token",

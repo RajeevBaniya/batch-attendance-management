@@ -1,6 +1,7 @@
-import { Request, Response } from "express";
+import { type Request, type Response } from "express";
 
 import { errorResponse } from "../../utils/errorResponse";
+
 import { listPublicInstitutions } from "./publicService";
 
 const getPublicInstitutionsHandler = async (req: Request, res: Response) => {

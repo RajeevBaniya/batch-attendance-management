@@ -1,5 +1,5 @@
-import { Role } from "@prisma/client";
-import { NextFunction, Request, Response } from "express";
+import { type Role } from "@prisma/client";
+import { type NextFunction, type Request, type Response } from "express";
 
 const requireRole = (allowedRoles: Role[]) => {
   const roleMiddleware = (req: Request, res: Response, next: NextFunction) => {

@@ -1,7 +1,8 @@
 import { Role } from "@prisma/client";
 
-import prisma from "./db";
 import { hashPassword } from "../utils/password";
+
+import prisma from "./db";
 
 const bootstrapSuperAdmin = async () => {
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
