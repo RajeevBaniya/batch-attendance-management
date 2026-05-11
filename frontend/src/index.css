@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(56, 71, 146, 0.22), transparent 48%),
+      radial-gradient(circle at 80% 10%, rgba(6, 182, 212, 0.15), transparent 45%),
+      linear-gradient(180deg, #050816 0%, #0b1220 45%, #0a1222 100%);
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgba(99, 102, 241, 0.35);
+    color: #f8fafc;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.55) rgba(15, 23, 42, 0.35);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(129, 140, 248, 0.8);
+    outline-offset: 2px;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.28);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    background-color: rgba(100, 116, 139, 0.55);
+  }
+}
+
+@layer components {
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950;
+  }
+
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight text-slate-100 md:text-3xl;
+  }
+
+  .section-title {
+    @apply text-lg font-semibold tracking-tight text-slate-100;
+  }
+
+  .body-text {
+    @apply text-sm text-slate-300;
+  }
+
+  .muted-text {
+    @apply text-sm text-slate-400;
+  }
+
+  .field-label {
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400;
+  }
+}
