@@ -1,0 +1,24 @@
+const BACKEND_ROLES = [
+  "SUPER_ADMIN",
+  "PROGRAMME_MANAGER",
+  "MONITORING_OFFICER",
+  "INSTITUTION",
+  "TRAINER",
+  "STUDENT",
+  "PENDING_TRAINER",
+] as const;
+
+type BackendRole = (typeof BACKEND_ROLES)[number];
+
+const ROLE = {
+  SUPER_ADMIN: "SUPER_ADMIN",
+  PROGRAMME_MANAGER: "PROGRAMME_MANAGER",
+  MONITORING_OFFICER: "MONITORING_OFFICER",
+  INSTITUTION: "INSTITUTION",
+  TRAINER: "TRAINER",
+  STUDENT: "STUDENT",
+  PENDING_TRAINER: "PENDING_TRAINER",
+} as const satisfies Record<BackendRole, BackendRole>;
+
+export { BACKEND_ROLES, ROLE };
+export type { BackendRole };
